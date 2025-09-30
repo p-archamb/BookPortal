@@ -1,36 +1,69 @@
-name: AWS-EC2 Instance CD
+# Name of the workflow
+name: AWS EC2 Continuous Deployment
 
+# This workflow is triggered whenever the "Node.js CI" workflow completes successfully.
+# Make sure the workflow name "Node.js CI" matches the `name:` field in your CI workflow file.
 on:
   workflow_run:
     workflows: ["Node.js CI"]
-    types: [completed]
+    types:
+      - completed
 
 jobs:
-  on-success:
-
+  # The deployment job will only run if the CI workflow was successful.
+  deploy:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
     steps:
-      - name: AWS SSM Send-Command
+      # Step 1: Configure AWS credentials in the environment.
+      # This is the recommended and most secure way to provide credentials to the AWS CLI or SDK.
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # aws-session-token is optional and only needed for temporary credentials.
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Step 2: Send the deployment commands to your EC2 instance via AWS SSM.
+      # The action will automatically use the credentials configured in the previous step.
+      - name: Deploy to EC2 via SSM
         uses: peterkimzz/aws-ssm-send-command@v1.1.1
         with:
-          # AWS access key id
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          # AWS secret access key
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN}}
-          # Where EC2 instance is
-          aws-region: ${{ secrets.AWS_REGION }}
-          # AWS EC2 Instance id or ids
+          # A comma-separated list of EC2 instance IDs.
           instance-ids: ${{ secrets.AWS_INSTANCE_ID }}
-          # Command execution location
+          # Optional: The working directory where the commands will be executed on the instance.
           working-directory: /home/ec2-user
-          # Bash command you want to execute
+          # A descriptive comment for the SSM command history.
+          comment: Triggered by successful 'Node.js CI' workflow run.
+          # The series of shell commands to execute on the instance.
           command: |
-            sudo docker-compose stop
-            sudo docker-compose rm -f
+            set -e # Exit immediately if a command exits with a non-zero status.
+            
+            # --- IMPORTANT ---
+            # Navigate to the directory containing your docker-compose.yml file.
+            # Update this path to match your server's setup.
+            cd /home/ec2-user/your-project-directory
+            
+            echo "Starting deployment..."
+            
+            # Use 'docker-compose down' for a cleaner stop and removal of old containers.
+            echo "Stopping and removing old containers..."
+            sudo docker-compose down
+            
+            # Pull the latest versions of the images specified in your docker-compose.yml file.
+            echo "Pulling latest Docker images..."
             sudo docker-compose pull
-            sudo docker-compose up -d
+            
+            # Start the services in detached mode.
+            # --remove-orphans cleans up containers for services that no longer exist in the compose file.
+            echo "Starting new containers..."
+            sudo docker-compose up -d --remove-orphans
+            
+            # Clean up any unused (dangling) Docker images to save disk space.
+            echo "Pruning old Docker images..."
             sudo docker image prune -af
-          # Comment for Send-Command
-          comment: docker-compose.yml file re-pulls newer versions of book-portal images and runs them on the instance.
+            
+            echo "Deployment successful!"
