@@ -1,17 +1,49 @@
 version: "3"
 services:
+  mysql:
+    image: mysql:8.0
+    platform: linux/amd64
+    container_name: "book-portal-mysql"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: book_portal
+      MYSQL_USER: uqi
+      MYSQL_PASSWORD: Deneme123..
+    ports:
+      - "3308:3308"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./book-portal-be/sql-scripts:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    
   book-portal-be:
-    image: ugurcanerdogan/book-portal-be:latest
+    platform: linux/amd64
+    build: ./book-portal-be
     container_name: "book-portal-be"
-
+    depends_on:
+      - mysql
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/book_portal?useSSL=false
+      SPRING_DATASOURCE_USERNAME: uqi
+      SPRING_DATASOURCE_PASSWORD: Deneme123..
+      
   book-portal-fe:
-    image: ugurcanerdogan/book-portal-fe:latest
+    platform: linux/amd64
+    build: ./book-portal-fe
     container_name: "book-portal-fe"
     depends_on:
       - book-portal-be
+      
   proxy:
-    image: ugurcanerdogan/book-portal-proxy:latest
+    platform: linux/amd64
+    build: ./nginx
     container_name: "book-portal-proxy"
     restart: always
     ports:
       - "80:80"
+    depends_on:
+      - book-portal-fe
+      - book-portal-be
+
+volumes:
+  mysql_data:
