@@ -26,43 +26,23 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Step 2: Send the deployment commands to your EC2 instance via AWS SSM.
-      # This action will now automatically use the credentials configured in the previous step.
-      - name: Deploy to EC2 via SSM
-        uses: peterkimzz/aws-ssm-send-command@v1.1.1
-        with:
-          # A comma-separated list of EC2 instance IDs.
-          instance-ids: ${{ secrets.AWS_INSTANCE_ID }}
-          # The working directory where the commands will be executed on the instance.
-          working-directory: /home/ec2-user
-          # A descriptive comment for the SSM command history.
-          comment: Triggered by successful 'Node.js CI' workflow run.
-          # The series of shell commands to execute on the instance.
-          command: |
-            set -e # Exit immediately if a command exits with a non-zero status.
-            
-            # --- IMPORTANT ---
-            # Navigate to the directory containing your docker-compose.yml file.
-            # Update this path to match your server's setup.
-            cd /home/ec2-user/your-project-directory
-            
-            echo "Starting deployment..."
-            
-            # Use 'docker-compose down' for a cleaner stop and removal of old containers.
-            echo "Stopping and removing old containers..."
-            sudo docker-compose down
-            
-            # Pull the latest versions of the images specified in your docker-compose.yml file.
-            echo "Pulling latest Docker images..."
-            sudo docker-compose pull
-            
-            # Start the services in detached mode.
-            # --remove-orphans cleans up containers for services that no longer exist in the compose file.
-            echo "Starting new containers..."
-            sudo docker-compose up -d --remove-orphans
-            
-            # Clean up any unused (dangling) Docker images to save disk space.
-            echo "Pruning old Docker images..."
-            sudo docker image prune -af
-            
-            echo "Deployment successful!"
+      # Step 2: Send deployment commands via SSM using the official AWS CLI.
+      # This is more reliable than third-party actions for credential handling.
+      - name: Deploy to EC2 via SSM using AWS CLI
+        run: |
+          aws ssm send-command \
+            --instance-ids "${{ secrets.AWS_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Triggered by successful 'Node.js CI' workflow run" \
+            --parameters '{
+              "commands": [
+                "set -e",
+                "cd /home/ec2-user/your-project-directory",
+                "echo \"Starting deployment on EC2...\"",
+                "sudo docker-compose down",
+                "sudo docker-compose pull",
+                "sudo docker-compose up -d --remove-orphans",
+                "sudo docker image prune -af",
+                "echo \"Deployment successful!\""
+              ]
+            }'
