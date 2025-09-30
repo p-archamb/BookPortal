@@ -16,20 +16,24 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      # Step 1: Send the deployment commands to your EC2 instance via AWS SSM.
-      # This action requires credentials to be passed directly as inputs.
-      - name: Deploy to EC2 via SSM
-        uses: peterkimzz/aws-ssm-send-command@v1.1.1
+      # Step 1: Configure AWS credentials, including the session token.
+      # This action correctly sets up the environment for subsequent AWS commands.
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Credentials are passed directly to this action.
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Step 2: Send the deployment commands to your EC2 instance via AWS SSM.
+      # This action will now automatically use the credentials configured in the previous step.
+      - name: Deploy to EC2 via SSM
+        uses: peterkimzz/aws-ssm-send-command@v1.1.1
+        with:
           # A comma-separated list of EC2 instance IDs.
           instance-ids: ${{ secrets.AWS_INSTANCE_ID }}
-          # Optional: The working directory where the commands will be executed on the instance.
+          # The working directory where the commands will be executed on the instance.
           working-directory: /home/ec2-user
           # A descriptive comment for the SSM command history.
           comment: Triggered by successful 'Node.js CI' workflow run.
